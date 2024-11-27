@@ -23,7 +23,7 @@ class SQLConnector {
         return new Promise((resolve, reject) => {
           this.dbConnection.connect((err) => {
             if (err) {
-              return reject(new Error("Invalid MySQL credentials"));
+              return reject(new Error("Invalid credentials"));
             }
             resolve("MySQL DB Connected");
           });
