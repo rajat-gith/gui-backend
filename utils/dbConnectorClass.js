@@ -18,6 +18,7 @@ class SQLConnector {
           port: port || 3306,
           user,
           password,
+          database
         });
 
         return new Promise((resolve, reject) => {
