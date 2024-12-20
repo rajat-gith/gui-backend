@@ -21,6 +21,16 @@ const connectDatabase = async (req, res) => {
   }
 };
 
+const disconnectDatabase = async (req, res) => {
+  try {
+    const message = await sqlConnector.disconnect();
+    return res.json({ success: true, data: message });
+  } catch (error) {
+    console.error("Database Disconnection Error:", error.message);
+    return res.status(400).json({ success: false, data: error.message });
+  }
+};
+
 const runQuery = async (req, res) => {
   try {
     const { query } = req.body;
@@ -41,4 +51,4 @@ const runQuery = async (req, res) => {
   }
 };
 
-module.exports = { connectDatabase, runQuery };
+module.exports = { connectDatabase, runQuery, disconnectDatabase };
