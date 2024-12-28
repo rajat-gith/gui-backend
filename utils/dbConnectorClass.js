@@ -6,36 +6,29 @@ class SQLConnector {
     this.dbConnection = null;
   }
 
-  async connect({ dbType, host, port, user, password, database }) {
-    if (!dbType || !host || !user || !password) {
-      throw new Error("All fields are required");
+  async connect({ dbType, ...dbOptions }) {
+    if (!dbType) {
+      throw new Error("Database type is required");
     }
-
     try {
       if (dbType === "mysql") {
         this.dbConnection = mysql.createConnection({
-          host,
-          port: port || 3306,
-          user,
-          password,
-          database
+          ...dbOptions,
+          port: dbOptions.port || 3306,
         });
 
         return new Promise((resolve, reject) => {
           this.dbConnection.connect((err) => {
             if (err) {
-              return reject(new Error("Invalid credentials"));
+              return reject(new Error("MySQL connection failed: " + err.message));
             }
-            resolve("MySQL DB Connected");
+            resolve(`MySQL DB Connected with ThreadId ${this.dbConnection?.threadId}`);
           });
         });
       } else if (dbType === "postgresql") {
         this.dbConnection = new Client({
-          host,
-          port: port || 5432,
-          user,
-          password,
-          database,
+          ...dbOptions,
+          port: dbOptions.port || 5432,
         });
 
         await this.dbConnection.connect();
@@ -44,7 +37,7 @@ class SQLConnector {
         throw new Error("Unsupported database type");
       }
     } catch (error) {
-      throw new Error(error.message);
+      throw new Error(`Database connection error: ${error.message}`);
     }
   }
 
@@ -53,10 +46,20 @@ class SQLConnector {
       throw new Error("Not connected to a database");
     }
 
+    if (this.dbConnection.ping) {
+      try {
+        await new Promise((resolve, reject) =>
+          this.dbConnection.ping((err) => (err ? reject(err) : resolve()))
+        );
+      } catch {
+        throw new Error("Lost connection to the database");
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.dbConnection.query(queryString, (err, results) => {
         if (err) {
-          return reject(err);
+          return reject(new Error("Query execution failed: " + err.message));
         }
         resolve(results);
       });
@@ -65,13 +68,46 @@ class SQLConnector {
 
   async disconnect() {
     if (this.dbConnection) {
-      if (this.dbConnection.end) {
-        this.dbConnection.end();
-      } else if (this.dbConnection.close) {
-        await this.dbConnection.close();
+      try {
+        if (this.dbConnection.end) {
+          this.dbConnection.end();
+        } else if (this.dbConnection.close) {
+          await this.dbConnection.close();
+        }
+      } catch (err) {
+        console.error("Error while disconnecting:", err.message);
+      } finally {
+        this.dbConnection = null;
       }
     }
   }
+
+  async isConnected() {
+    if (!this.dbConnection) {
+      return false;
+    }
+  
+    if (this.dbConnection.ping) {
+      try {
+        await new Promise((resolve, reject) =>
+          this.dbConnection.ping((err) => (err ? reject(err) : resolve()))
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    } else if (this.dbConnection instanceof Client) {
+      try {
+        await this.dbConnection.query("SELECT 1");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  
+    return false;
+  }
+  
 }
 
 module.exports = SQLConnector;

@@ -3,7 +3,8 @@ const {
   connectDatabase,
   runQuery,
   disconnectDatabase,
-  generateQuery, 
+  generateQuery,
+  checkConnected,
 } = require("../controllers/queryController");
 const { validateCredentials } = require("../middlewares/validationMiddleware");
 
@@ -13,5 +14,6 @@ router.post("/connect", validateCredentials, connectDatabase);
 router.post("/disconnect", disconnectDatabase);
 router.post("/query", runQuery);
 router.post("/generate-query", generateQuery);
+// router.post("/ping", checkConnected);
 
 module.exports = router;
