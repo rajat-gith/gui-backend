@@ -7,7 +7,8 @@ const axios = require("axios");
 const sqlConnector = new SQLConnector();
 let isDatabaseConnected = true;
 const connections = new Map(); // Map to track WebSocket connections by userId
-const wss = new WebSocket.Server({ port: 8080 });
+const PORT = process.env.PORT || 3000;
+const wss = new WebSocket.Server({ port: PORT })
 
 // Database connection handler
 const connectDatabase = async (req, res) => {
