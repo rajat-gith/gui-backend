@@ -1,7 +1,15 @@
+const https = require("https");
+const fs = require("fs");
 const app = require("./app");
 
-const HTTP_PORT = process.env.HTTP_PORT || 80;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 
-app.listen(HTTP_PORT, () => {
-  console.log(`Server running on port ${HTTP_PORT}`);
+const options = {
+  key: fs.readFileSync("private.key"), 
+  cert: fs.readFileSync("certificate.crt"), 
+  ca: fs.readFileSync("ca_bundle.crt")
+};
+
+https.createServer(options, app).listen(HTTPS_PORT, () => {
+  console.log(`HTTPS Server running on port ${HTTPS_PORT}`);
 });
