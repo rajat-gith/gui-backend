@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { broadcastStatus } = require("../utils/dbConnectorClass");
+const { broadcastStatus } = require("../utils/wsController");
 const SQLConnector = require("../utils/dbConnectorClass");
 require("dotenv").config();
 

@@ -2,7 +2,7 @@ const https = require("https");
 const fs = require("fs");
 const app = require("./app");
 const WebSocket = require("ws");
-const { initializeWebSocket } = require("./controllers/websocketController");
+const { initializeWebSocket } = require("./utils/wsController");
 
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 
