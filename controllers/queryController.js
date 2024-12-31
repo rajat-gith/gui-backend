@@ -1,28 +1,21 @@
-const WebSocket = require("ws");
-require("dotenv").config();
-const SQLConnector = require("../utils/dbConnectorClass");
 const axios = require("axios");
-
+const { broadcastStatus } = require("../utils/dbConnectorClass");
+const SQLConnector = require("../utils/dbConnectorClass");
+require("dotenv").config();
 
 const sqlConnector = new SQLConnector();
-let isDatabaseConnected = true;
-const connections = new Map(); // Map to track WebSocket connections by userId
+let isDatabaseConnected = false;
+let lastCheckTime = null;
 
-// Database connection handler
 const connectDatabase = async (req, res) => {
   const { dbType, host, port, user, password, database } = req.body;
 
   try {
     const message = await sqlConnector.connect({
-      dbType,
-      host,
-      port,
-      user,
-      password,
-      database,
+      dbType, host, port, user, password, database
     });
     isDatabaseConnected = true;
-    broadcastStatus(isDatabaseConnected ? "connected" : "disconnected");
+    broadcastStatus("connected");
     return res.json({ success: true, data: message });
   } catch (error) {
     console.error("Database Connection Error:", error.message);
@@ -32,7 +25,6 @@ const connectDatabase = async (req, res) => {
   }
 };
 
-// Database disconnection handler
 const disconnectDatabase = async (req, res) => {
   try {
     const message = await sqlConnector.disconnect();
@@ -45,7 +37,6 @@ const disconnectDatabase = async (req, res) => {
   }
 };
 
-// Query execution handler
 const runQuery = async (req, res) => {
   const { query } = req.body;
 
@@ -58,24 +49,13 @@ const runQuery = async (req, res) => {
     return res.json({ success: true, data: results });
   } catch (error) {
     console.error("Query Execution Error:", error.message);
-
     const response = error.message.includes("Not connected to a database")
-      ? {
-          status: 503,
-          data: "Database connection not established. Please try again later.",
-        }
-      : {
-          status: 500,
-          data: "Failed to execute query.",
-        };
-
-    return res
-      .status(response.status)
-      .json({ success: false, data: response.data });
+      ? { status: 503, data: "Database connection not established. Please try again later." }
+      : { status: 500, data: "Failed to execute query." };
+    return res.status(response.status).json({ success: false, data: response.data });
   }
 };
 
-// Fetch database columns
 const fetchColumnsFromDB = async (tableName) => {
   try {
     const fetchColumnsQuery = `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${tableName}'`;
@@ -84,7 +64,6 @@ const fetchColumnsFromDB = async (tableName) => {
     if (!res || res.length === 0) {
       throw new Error(`No columns found for table: ${tableName}`);
     }
-    console.log(res);
     return res.reduce((acc, row) => {
       acc[row.COLUMN_NAME] = row.DATA_TYPE;
       return acc;
@@ -95,7 +74,6 @@ const fetchColumnsFromDB = async (tableName) => {
   }
 };
 
-// Natural language to SQL query generator
 const generateQuery = async (req, res) => {
   const { naturalQuery, tableName } = req.body;
 
@@ -108,8 +86,8 @@ const generateQuery = async (req, res) => {
 
   try {
     const columns = await fetchColumnsFromDB(tableName);
-
     const fastApiUrl = process.env.FASTAPI_URL;
+    
     if (!fastApiUrl) {
       return res.status(500).json({
         success: false,
@@ -122,11 +100,6 @@ const generateQuery = async (req, res) => {
       table_name: tableName,
       columns: columns,
     });
-    console.log({
-      natural_query: naturalQuery,
-      table_name: tableName,
-      columns,
-    });
 
     const { sql_query: sqlQuery } = fastApiResponse.data;
     if (!sqlQuery) {
@@ -136,57 +109,13 @@ const generateQuery = async (req, res) => {
     return res.json({ success: true, query: sqlQuery });
   } catch (error) {
     console.error("Error in Query Generation:", error.message);
-
     const errorMessage = error.response
       ? `FastAPI Error: ${error.response.data.detail}`
       : "Failed to process the request.";
-
     return res.status(500).json({ success: false, data: errorMessage });
   }
 };
 
-// Enhanced status broadcast function
-const broadcastStatus = (status) => {
-  const timestamp = new Date().toISOString();
-  connections.forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          status,
-          timestamp,
-          lastChecked: timestamp,
-        })
-      );
-    }
-  });
-};
-
-// Connection monitoring variables and functions
-let lastCheckTime = null;
-
-const checkDatabaseConnection = async () => {
-  try {
-    const currentStatus = await sqlConnector.isConnected();
-    lastCheckTime = new Date().toISOString();
-
-    // Always broadcast the current status
-    broadcastStatus(currentStatus ? "connected" : "disconnected");
-
-    // Update the stored status
-    isDatabaseConnected = currentStatus;
-
-    // console.log(
-    //   `Database status check at ${lastCheckTime}: ${
-    //     currentStatus ? "Connected" : "Disconnected"
-    //   }`
-    // );
-  } catch (error) {
-    console.error("Database Status Check Error:", error.message);
-    isDatabaseConnected = false;
-    broadcastStatus("disconnected");
-  }
-};
-// Connection status endpoint
 const getConnectionStatus = async (req, res) => {
   try {
     const currentStatus = await sqlConnector.isConnected();
@@ -195,29 +124,36 @@ const getConnectionStatus = async (req, res) => {
       status: currentStatus ? "connected" : "disconnected",
       lastChecked: lastCheckTime,
       storedStatus: isDatabaseConnected,
-      activeConnections: connections.size,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: error.message,
       lastChecked: lastCheckTime,
-      activeConnections: connections.size,
     });
   }
 };
 
-// Initialize immediate connection check
-checkDatabaseConnection();
+const checkDatabaseConnection = async () => {
+  try {
+    const currentStatus = await sqlConnector.isConnected();
+    lastCheckTime = new Date().toISOString();
+    isDatabaseConnected = currentStatus;
+    broadcastStatus(currentStatus ? "connected" : "disconnected");
+  } catch (error) {
+    console.error("Database Status Check Error:", error.message);
+    isDatabaseConnected = false;
+    broadcastStatus("disconnected");
+  }
+};
 
-// Set up regular interval checking
+checkDatabaseConnection();
 setInterval(checkDatabaseConnection, 5000);
 
-// Export all handlers
 module.exports = {
   connectDatabase,
-  runQuery,
   disconnectDatabase,
+  runQuery,
   generateQuery,
   getConnectionStatus,
 };
