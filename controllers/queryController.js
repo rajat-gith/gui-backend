@@ -8,7 +8,7 @@ const sqlConnector = new SQLConnector();
 let isDatabaseConnected = true;
 const connections = new Map(); // Map to track WebSocket connections by userId
 const WS_PORT = process.env.WS_PORT || 8080;
-const wss = new WebSocket.Server({ port: WS_PORT })
+const wss = new WebSocket.Server({ port: WS_PORT });
 
 // Database connection handler
 const connectDatabase = async (req, res) => {
@@ -86,9 +86,9 @@ const fetchColumnsFromDB = async (tableName) => {
     if (!res || res.length === 0) {
       throw new Error(`No columns found for table: ${tableName}`);
     }
-
+    console.log(res);
     return res.reduce((acc, row) => {
-      acc[row.column_name] = row.data_type;
+      acc[row.COLUMN_NAME] = row.DATA_TYPE;
       return acc;
     }, {});
   } catch (error) {
@@ -122,6 +122,11 @@ const generateQuery = async (req, res) => {
     const fastApiResponse = await axios.post(`${fastApiUrl}/process-query`, {
       natural_query: naturalQuery,
       table_name: tableName,
+      columns: columns,
+    });
+    console.log({
+      natural_query: naturalQuery,
+      table_name: tableName,
       columns,
     });
 
@@ -147,11 +152,13 @@ const broadcastStatus = (status) => {
   const timestamp = new Date().toISOString();
   connections.forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ 
-        status,
-        timestamp,
-        lastChecked: timestamp
-      }));
+      ws.send(
+        JSON.stringify({
+          status,
+          timestamp,
+          lastChecked: timestamp,
+        })
+      );
     }
   });
 };
@@ -163,14 +170,18 @@ const checkDatabaseConnection = async () => {
   try {
     const currentStatus = await sqlConnector.isConnected();
     lastCheckTime = new Date().toISOString();
-    
+
     // Always broadcast the current status
     broadcastStatus(currentStatus ? "connected" : "disconnected");
-    
+
     // Update the stored status
     isDatabaseConnected = currentStatus;
-    
-    console.log(`Database status check at ${lastCheckTime}: ${currentStatus ? "Connected" : "Disconnected"}`);
+
+    console.log(
+      `Database status check at ${lastCheckTime}: ${
+        currentStatus ? "Connected" : "Disconnected"
+      }`
+    );
   } catch (error) {
     console.error("Database Status Check Error:", error.message);
     isDatabaseConnected = false;
@@ -189,16 +200,18 @@ wss.on("connection", (ws, request) => {
   }
 
   console.log(`WebSocket connection established for User ID: ${userId}`);
-  
+
   // Store the connection
   connections.set(userId, ws);
-  
+
   // Send initial status to the new connection
-  ws.send(JSON.stringify({
-    status: isDatabaseConnected ? "connected" : "disconnected",
-    timestamp: new Date().toISOString(),
-    lastChecked: lastCheckTime
-  }));
+  ws.send(
+    JSON.stringify({
+      status: isDatabaseConnected ? "connected" : "disconnected",
+      timestamp: new Date().toISOString(),
+      lastChecked: lastCheckTime,
+    })
+  );
 
   ws.on("message", (message) => {
     console.log(`Message from User ${userId}:`, message);
@@ -224,14 +237,14 @@ const getConnectionStatus = async (req, res) => {
       status: currentStatus ? "connected" : "disconnected",
       lastChecked: lastCheckTime,
       storedStatus: isDatabaseConnected,
-      activeConnections: connections.size
+      activeConnections: connections.size,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: error.message,
       lastChecked: lastCheckTime,
-      activeConnections: connections.size
+      activeConnections: connections.size,
     });
   }
 };
@@ -248,5 +261,5 @@ module.exports = {
   runQuery,
   disconnectDatabase,
   generateQuery,
-  getConnectionStatus
+  getConnectionStatus,
 };
