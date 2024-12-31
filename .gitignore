@@ -1,2 +1,5 @@
 node_modules
 .env
+private.key
+ca_bundle.crt
+certificate.crt
