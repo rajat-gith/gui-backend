@@ -3,12 +3,10 @@ require("dotenv").config();
 const SQLConnector = require("../utils/dbConnectorClass");
 const axios = require("axios");
 
-// Initialize core components
+
 const sqlConnector = new SQLConnector();
 let isDatabaseConnected = true;
 const connections = new Map(); // Map to track WebSocket connections by userId
-const WS_PORT = process.env.WS_PORT || 8080;
-const wss = new WebSocket.Server({ port: WS_PORT });
 
 // Database connection handler
 const connectDatabase = async (req, res) => {
@@ -177,57 +175,17 @@ const checkDatabaseConnection = async () => {
     // Update the stored status
     isDatabaseConnected = currentStatus;
 
-    console.log(
-      `Database status check at ${lastCheckTime}: ${
-        currentStatus ? "Connected" : "Disconnected"
-      }`
-    );
+    // console.log(
+    //   `Database status check at ${lastCheckTime}: ${
+    //     currentStatus ? "Connected" : "Disconnected"
+    //   }`
+    // );
   } catch (error) {
     console.error("Database Status Check Error:", error.message);
     isDatabaseConnected = false;
     broadcastStatus("disconnected");
   }
 };
-
-// WebSocket connection handler
-wss.on("connection", (ws, request) => {
-  const params = new URLSearchParams(request.url.split("?")[1]);
-  const userId = params.get("userId");
-
-  if (!userId) {
-    ws.close(1008, "User ID is required");
-    return;
-  }
-
-  console.log(`WebSocket connection established for User ID: ${userId}`);
-
-  // Store the connection
-  connections.set(userId, ws);
-
-  // Send initial status to the new connection
-  ws.send(
-    JSON.stringify({
-      status: isDatabaseConnected ? "connected" : "disconnected",
-      timestamp: new Date().toISOString(),
-      lastChecked: lastCheckTime,
-    })
-  );
-
-  ws.on("message", (message) => {
-    console.log(`Message from User ${userId}:`, message);
-  });
-
-  ws.on("close", () => {
-    console.log(`WebSocket connection closed for User ID: ${userId}`);
-    connections.delete(userId);
-  });
-
-  ws.on("error", (error) => {
-    console.error(`WebSocket error for User ${userId}:`, error);
-    connections.delete(userId);
-  });
-});
-
 // Connection status endpoint
 const getConnectionStatus = async (req, res) => {
   try {
