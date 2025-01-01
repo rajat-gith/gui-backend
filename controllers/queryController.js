@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { broadcastStatus } = require("../utils/wsController");
+const { sendStatusToUser } = require("../utils/wsController");
 const SQLConnector = require("../utils/dbConnectorClass");
 require("dotenv").config();
 
@@ -15,12 +15,12 @@ const connectDatabase = async (req, res) => {
       dbType, host, port, user, password, database
     });
     isDatabaseConnected = true;
-    broadcastStatus("connected");
+    sendStatusToUser("connected");
     return res.json({ success: true, data: message });
   } catch (error) {
     console.error("Database Connection Error:", error.message);
     isDatabaseConnected = false;
-    broadcastStatus("disconnected");
+    sendStatusToUser("disconnected");
     return res.status(400).json({ success: false, data: error.message });
   }
 };
@@ -29,7 +29,7 @@ const disconnectDatabase = async (req, res) => {
   try {
     const message = await sqlConnector.disconnect();
     isDatabaseConnected = false;
-    broadcastStatus("disconnected");
+    sendStatusToUser("disconnected");
     return res.json({ success: true, data: message });
   } catch (error) {
     console.error("Database Disconnection Error:", error.message);
@@ -139,11 +139,11 @@ const checkDatabaseConnection = async () => {
     const currentStatus = await sqlConnector.isConnected();
     lastCheckTime = new Date().toISOString();
     isDatabaseConnected = currentStatus;
-    broadcastStatus(currentStatus ? "connected" : "disconnected");
+    sendStatusToUser(currentStatus ? "connected" : "disconnected");
   } catch (error) {
     console.error("Database Status Check Error:", error.message);
     isDatabaseConnected = false;
-    broadcastStatus("disconnected");
+    sendStatusToUser("disconnected");
   }
 };
 
