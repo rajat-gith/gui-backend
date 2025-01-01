@@ -4,19 +4,20 @@ const connections = new Map();
 let isDatabaseConnected = false;
 let lastCheckTime = null;
 
-const broadcastStatus = (status) => {
+const sendStatusToUser = (status, userId) => {
   const timestamp = new Date().toISOString();
-  connections.forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          status,
-          timestamp,
-          lastChecked: timestamp,
-        })
-      );
-    }
+  const message = JSON.stringify({
+    status,
+    timestamp,
+    lastChecked: timestamp,
   });
+
+  const ws = connections.get(userId);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(message);
+  } else {
+    console.error(`WebSocket not open for User ID: ${userId}`);
+  }
 };
 
 const initializeWebSocket = (wss) => {
@@ -58,7 +59,7 @@ const initializeWebSocket = (wss) => {
 
 module.exports = {
   connections,
-  broadcastStatus,
+  sendStatusToUser,
   initializeWebSocket,
   isDatabaseConnected,
   lastCheckTime,
