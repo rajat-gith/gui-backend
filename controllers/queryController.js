@@ -136,7 +136,7 @@ const generateQuery = async (req, res) => {
   } catch (error) {
     console.error("Error in Query Generation:", error.message);
     const errorMessage = error.response
-      ? `FastAPI Error: ${error.response.data.detail}`
+      ? `FastAPI Error: ${error}`
       : "Failed to process the request.";
     return res.status(500).json({ success: false, data: errorMessage });
   }
