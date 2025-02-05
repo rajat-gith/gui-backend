@@ -58,7 +58,7 @@ const disconnectDatabase = async (req, res) => {
 // Run a database query
 const runQuery = async (req, res) => {
   const { query, connectionId } = req.body;
-  console.log(req.body)
+  console.log(req.body);
   if (!query) {
     return res.status(400).json({ success: false, data: "Query is required" });
   }
@@ -81,10 +81,10 @@ const runQuery = async (req, res) => {
 };
 
 // Fetch columns from the specified table
-const fetchColumnsFromDB = async (tableName) => {
+const fetchColumnsFromDB = async (tableName, connId) => {
   try {
     const fetchColumnsQuery = `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${tableName}'`;
-    const res = await sqlConnector.query(fetchColumnsQuery);
+    const res = await sqlConnector.query(connId, fetchColumnsQuery);
 
     if (!res || res.length === 0) {
       throw new Error(`No columns found for table: ${tableName}`);
@@ -101,7 +101,7 @@ const fetchColumnsFromDB = async (tableName) => {
 
 // Generate a SQL query based on a natural query and table name
 const generateQuery = async (req, res) => {
-  const { naturalQuery, tableName } = req.body;
+  const { naturalQuery, tableName, connId } = req.body;
 
   if (!naturalQuery || !tableName) {
     return res.status(400).json({
@@ -111,7 +111,7 @@ const generateQuery = async (req, res) => {
   }
 
   try {
-    const columns = await fetchColumnsFromDB(tableName);
+    const columns = await fetchColumnsFromDB(tableName, connId);
 
     const fastApiUrl = process.env.FASTAPI_URL;
     if (!fastApiUrl) {
