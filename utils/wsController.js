@@ -4,17 +4,19 @@ const connections = new Map();
 let isDatabaseConnected = false;
 let lastCheckTime = null;
 
-const sendStatusToUser = (status, userId) => {
+const sendStatusToUser = (status, userId, connId) => {
   const timestamp = new Date().toISOString();
   const message = JSON.stringify({
     status,
     timestamp,
     lastChecked: timestamp,
+    connId: connId,
   });
-
   const ws = connections.get(userId);
+  console.log(Boolean(ws), "got a websocket");
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(message);
+    console.log("Sent message");
   } else {
     console.error(`WebSocket not open for User ID: ${userId}`);
   }
@@ -35,7 +37,7 @@ const initializeWebSocket = (wss) => {
 
     ws.send(
       JSON.stringify({
-        status: isDatabaseConnected ? "connected" : "disconnected",
+        status: "hello",
         timestamp: new Date().toISOString(),
         lastChecked: lastCheckTime,
       })

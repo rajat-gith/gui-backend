@@ -1,35 +1,53 @@
-const axios = require("axios");
-const { sendStatusToUser } = require("../utils/wsController");
-const SQLConnector = require("../utils/dbConnectorClass");
+const WebSocket = require("ws");
 require("dotenv").config();
+const SQLConnector = require("../utils/dbConnectorClass");
+const axios = require("axios");
+const { sendStatusToUser, connections } = require("../utils/wsController");
 
 const sqlConnector = new SQLConnector();
-let isDatabaseConnected = false;
+let isDatabaseConnected = false; // Default to false at the start
+const WS_PORT = process.env.WS_PORT || 8080;
+const wss = new WebSocket.Server({ port: WS_PORT });
 let lastCheckTime = null;
+const connectionUserMap = new Map();
+const userConnectionsMap = new Map();
 
 const connectDatabase = async (req, res) => {
-  const { dbType, host, port, user, password, database } = req.body;
+  const { dbType, host, port, user, password, database, connectionId } =
+    req.body;
+
+  console.log({ dbType, host, port, user, password, database, connectionId });
+
+  if (!dbType || !host || !user || !password || !connectionId) {
+    return res
+      .status(400)
+      .json({ success: false, data: "Missing required parameters" });
+  }
 
   try {
     const message = await sqlConnector.connect({
-      dbType, host, port, user, password, database
+      connectionId,
+      dbType,
+      host,
+      port,
+      user,
+      password,
+      database,
     });
-    isDatabaseConnected = true;
-    sendStatusToUser("connected");
+
     return res.json({ success: true, data: message });
   } catch (error) {
     console.error("Database Connection Error:", error.message);
-    isDatabaseConnected = false;
-    sendStatusToUser("disconnected");
     return res.status(400).json({ success: false, data: error.message });
   }
 };
 
+// Disconnect from the database
 const disconnectDatabase = async (req, res) => {
   try {
-    const message = await sqlConnector.disconnect();
+    const { id } = req.body;
+    const message = await sqlConnector.disconnect(id);
     isDatabaseConnected = false;
-    sendStatusToUser("disconnected");
     return res.json({ success: true, data: message });
   } catch (error) {
     console.error("Database Disconnection Error:", error.message);
@@ -37,25 +55,32 @@ const disconnectDatabase = async (req, res) => {
   }
 };
 
+// Run a database query
 const runQuery = async (req, res) => {
-  const { query } = req.body;
-
+  const { query, connectionId } = req.body;
+  console.log(req.body)
   if (!query) {
     return res.status(400).json({ success: false, data: "Query is required" });
   }
 
   try {
-    const results = await sqlConnector.query(query);
+    const results = await sqlConnector.query(connectionId, query);
     return res.json({ success: true, data: results });
   } catch (error) {
-    console.error("Query Execution Error:", error.message);
     const response = error.message.includes("Not connected to a database")
-      ? { status: 503, data: "Database connection not established. Please try again later." }
-      : { status: 500, data: "Failed to execute query." };
-    return res.status(response.status).json({ success: false, data: response.data });
+      ? {
+          status: 503,
+          data: "Database connection not established. Please try again later.",
+        }
+      : { status: 500, data: error };
+
+    return res
+      .status(response.status)
+      .json({ success: false, data: response.data });
   }
 };
 
+// Fetch columns from the specified table
 const fetchColumnsFromDB = async (tableName) => {
   try {
     const fetchColumnsQuery = `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${tableName}'`;
@@ -74,6 +99,7 @@ const fetchColumnsFromDB = async (tableName) => {
   }
 };
 
+// Generate a SQL query based on a natural query and table name
 const generateQuery = async (req, res) => {
   const { naturalQuery, tableName } = req.body;
 
@@ -86,8 +112,8 @@ const generateQuery = async (req, res) => {
 
   try {
     const columns = await fetchColumnsFromDB(tableName);
+
     const fastApiUrl = process.env.FASTAPI_URL;
-    
     if (!fastApiUrl) {
       return res.status(500).json({
         success: false,
@@ -116,44 +142,9 @@ const generateQuery = async (req, res) => {
   }
 };
 
-const getConnectionStatus = async (req, res) => {
-  try {
-    const currentStatus = await sqlConnector.isConnected();
-    res.json({
-      success: true,
-      status: currentStatus ? "connected" : "disconnected",
-      lastChecked: lastCheckTime,
-      storedStatus: isDatabaseConnected,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      lastChecked: lastCheckTime,
-    });
-  }
-};
-
-const checkDatabaseConnection = async () => {
-  try {
-    const currentStatus = await sqlConnector.isConnected();
-    lastCheckTime = new Date().toISOString();
-    isDatabaseConnected = currentStatus;
-    sendStatusToUser(currentStatus ? "connected" : "disconnected");
-  } catch (error) {
-    console.error("Database Status Check Error:", error.message);
-    isDatabaseConnected = false;
-    sendStatusToUser("disconnected");
-  }
-};
-
-checkDatabaseConnection();
-setInterval(checkDatabaseConnection, 5000);
-
 module.exports = {
   connectDatabase,
-  disconnectDatabase,
   runQuery,
+  disconnectDatabase,
   generateQuery,
-  getConnectionStatus,
 };
